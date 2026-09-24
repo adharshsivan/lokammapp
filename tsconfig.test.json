@@ -1,0 +1,1 @@
+{"compilerOptions":{"target":"ES2022","module":"ESNext","moduleResolution":"Bundler","strict":true,"skipLibCheck":true,"outDir":".qa"},"include":["src/terrain.ts","src/towns.ts","src/surface.ts"]}
