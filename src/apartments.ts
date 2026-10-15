@@ -519,7 +519,7 @@ export function createApartmentDistrict(
           if (settings.windowLights && rng() < 0.34) {
             const glowX = wx + (rng() - 0.5) * windowWidth * 0.42 + nx * 0.04;
             const glowZ = wz + (rng() - 0.5) * 0.08 + nz * 0.04;
-            plane(site, groundY, 'glow', '#ffffff', glowX, windowY + windowHeight * (rng() - 0.5) * 0.5, glowZ, 0.13, 0.17, facade.yaw);
+            plane(site, groundY, 'glow', '#ffffff', glowX, windowY + windowHeight * (rng() - 0.5) * 0.5, glowZ, 0.34, 0.48, facade.yaw);
           }
 
           const balconyFace = facade.face === 'front' || facade.face === 'back';
