@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { terrainGeometry,terrainHeight,rawHeight,nearestRoad,roads,random,landmarks,coastDistance,platforms,hillTownSites } from './terrain';
+import { terrainGeometry,terrainHeight,rawHeight,nearestRoad,roads,random,landmarks,coastDistance,platforms,hillTownSites,towns } from './terrain';
 import {townBuildings,townInterests,type TownInterest} from './towns';
 import {createLandscapeData,createSurfaceData,terrainPBR,roadPBR} from './materials';
+import {createApartmentDistrict,type ApartmentDistrict,type ApartmentSite} from './apartments';
 
 const material=(color:string)=>new THREE.MeshLambertMaterial({color});
 const palette={wall:material('#f0e2bf'),roof:material('#b75d37'),dark:material('#314e48'),wood:material('#826144'),white:material('#f7edcf'),red:material('#c5523f'),stone:material('#929d99'),leaf:material('#528044'),trunk:material('#907858'),water:material('#27868c'),gold:material('#d7aa55')};
@@ -119,6 +120,7 @@ type SectorData={group:THREE.Group;mesh:THREE.Mesh;low:THREE.BufferGeometry;high
 export class World {
   sectors:SectorData[]=[];water:THREE.Mesh;terrainMaterial:THREE.MeshStandardMaterial;active=0;roadGroup=new THREE.Group();
   landscapeData:THREE.DataTexture;surfaceData:THREE.DataTexture;
+  apartments:ApartmentDistrict|null=null;
   constructor(public scene:THREE.Scene,_renderer:THREE.WebGLRenderer) {
     this.landscapeData=createLandscapeData();this.surfaceData=createSurfaceData();this.terrainMaterial=terrainPBR(this.landscapeData,this.surfaceData);
     this.roadGroup.name='Road network — toggleable';this.scene.add(this.roadGroup);
@@ -239,7 +241,26 @@ export class World {
       const y=terrainHeight(x,z);box(b,'stone',x,y-.75,z,12,2.1,12);
       house(b,x,z,rng,kind);
     }
-    for(const site of townBuildings)house(b,site.x,site.z,rng,site.variant,site.heading);
+    const apartmentTowns=new Set(['Kannur','Kozhikode','Palakkad','Thrissur','Kochi','Kottayam','Alappuzha','Kollam','Thiruvananthapuram']);
+    const denseKeralaTowns=new Set(['Kannur','Kozhikode','Thrissur','Kochi','Alappuzha','Kollam']);
+    const apartmentSites:ApartmentSite[]=[];
+    for(const town of towns) {
+      if(!apartmentTowns.has(town.name))continue;
+      const candidates=townBuildings.filter(site=>site.town===town.name);
+      const wanted=['Kozhikode','Kochi','Thiruvananthapuram'].includes(town.name)?2:1;
+      let added=0;
+      for(const candidate of candidates) {
+        if(apartmentSites.some(site=>Math.hypot(site.x-candidate.x,site.z-candidate.z)<34))continue;
+        apartmentSites.push({
+          x:candidate.x,z:candidate.z,heading:candidate.heading,
+          region:denseKeralaTowns.has(town.name)?'kerala-dense':'modern-indian',
+          id:`${town.name.toLowerCase()}-${added+1}`,
+        });
+        if(++added>=wanted)break;
+      }
+    }
+    const apartmentOrigins=new Set(apartmentSites.map(site=>`${site.x},${site.z}`));
+    for(const site of townBuildings)if(!apartmentOrigins.has(`${site.x},${site.z}`))house(b,site.x,site.z,rng,site.variant,site.heading);
     for(const interest of townInterests)interestFeature(b,interest);
     // Working waterfront, beach pavilion and ridge shelter.
     for(let i=0;i<4;i++){house(b,-420,67+i*24,rng,i%3);jetty(b,-445,70+i*24);boat(b,-494,79+i*24);}
@@ -247,6 +268,15 @@ export class World {
     box(b,'wood',viewpoint.x+8,vy+.5,viewpoint.z+8,9,1,9);roof(b,viewpoint.x+8,vy+4.5,viewpoint.z+8,11,11,3);
     for(const a of [-1,1])for(const c of [-1,1])cylinder(b,'wood',viewpoint.x+8+a*4,vy+2.5,viewpoint.z+8+c*4,.2,.2,4);
     this.scene.add(finish(b));
+    this.apartments=createApartmentDistrict(apartmentSites,{
+      seed:94133,region:'mixed',floorRange:[3,6],
+      compoundWalls:false,parking:true,parkedVehicles:true,
+      balconies:true,balconyLaundry:true,laundryLines:true,
+      curtains:true,interiors:true,indoorPlants:true,outdoorPlants:true,
+      windowLights:true,timeOfDay:'day',
+    });
+    this.scene.add(this.apartments.group);
+    obstacles.push(...this.apartments.obstacles);
     // Rebuild far vegetation now that structural collision footprints exist.
     for(const s of this.sectors){s.group.remove(s.far);s.far.traverse(o=>{if(o instanceof THREE.InstancedMesh)o.dispose();});s.far=this.vegetation(s,false);s.group.add(s.far);}
   }
